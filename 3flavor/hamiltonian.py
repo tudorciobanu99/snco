@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy as sp
 
 class Hamiltonian:
     # Initialization
@@ -17,7 +18,7 @@ class Hamiltonian:
     # n_b0: baryon density at the center of the star
     # h_NS: scale height of the neutron star
     def __init__(self, constants):
-        self.delta_m2, self.theta_vac, self.R_nu, self.G_F, self.Y_e, self.n_b0, self.h_NS = constants
+        self.delta_m_12, self.delta_m_13, self.theta_12, self.theta_13, self.theta_23, self.R_nu, self.G_F, self.Y_e = constants
 
     # Reset Hamiltonian
     #
@@ -27,7 +28,7 @@ class Hamiltonian:
     # Returns:
     # None, but updates the Hamiltonian to only vacuum oscillations
     def reset_hamiltonian(self, E):
-        self.H = self.delta_m2/(4*E)*np.array([[-np.cos(2*self.theta_vac), np.sin(2*self.theta_vac)],[np.sin(2*self.theta_vac), np.cos(2*self.theta_vac)]],dtype=np.complex_)
+        self.H = self.delta_m_13/(2*E)*np.array([[np.sin(self.theta_13)**2, 0, np.cos(self.theta_13)*np.sin(self.theta_13)],[0, 0, 0],[np.cos(self.theta_13)*np.sin(self.theta_13), 0, np.cos(self.theta_13)**2]], dtype=np.complex128) + self.delta_m_12/(2*E)*np.array([[np.cos(self.theta_13)**2*np.sin(self.theta_12)**2, np.cos(self.theta_12)*np.cos(self.theta_13)*np.sin(self.theta_12), -np.cos(self.theta_13)*np.sin(self.theta_12)**2*np.sin(self.theta_13)],[np.cos(self.theta_12)*np.cos(self.theta_13)*np.sin(self.theta_12), np.cos(self.theta_12)**2, -np.cos(self.theta_12)*np.sin(self.theta_12)*np.sin(self.theta_13)],[-np.cos(self.theta_13)*np.sin(self.theta_12)**2*np.sin(self.theta_13), -np.cos(self.theta_12)*np.sin(self.theta_12)*np.sin(self.theta_13), np.sin(self.theta_12)**2*np.sin(self.theta_13)**2]], dtype=np.complex_)
 
     # Update Hamiltonian
     #
@@ -37,7 +38,7 @@ class Hamiltonian:
     # Returns:
     # None, but updates the Hamiltonian to include matter effects
     def update_hamiltonian(self, r):
-        self.H += 1e9*np.sqrt(2)*self.G_F*self.Y_e*self.n_e(r)*np.array([[1,0],[0,0]],dtype=np.complex_)
+        self.H += 1e-18*np.sqrt(2)*self.G_F*self.n_e(r)*np.array([[1,0,0],[0,0,0],[0,0,0]],dtype = np.complex_)
 
     # Electron density
     #
@@ -47,7 +48,8 @@ class Hamiltonian:
     # Returns:
     # Electron density
     def n_e(self, r):
-        n_e = self.n_b0*np.exp((self.R_nu-r)/self.h_NS)
+        n_e = 1.6e36*(5.06)**(-3)*1e-39*1e27*self.Y_e*np.exp((self.R_nu - r)/0.18e3) + 6.0e30*(5.06)**(-3)*1e-39*1e27*self.Y_e*(10e3/r)**3
+        #n_e = 1.63e36*(5.06)**(-3)*1e-39*1e27*self.Y_e*np.exp((self.R_nu - r)/0.18e3)
         return n_e
     
     # Hamiltonian change
@@ -60,7 +62,6 @@ class Hamiltonian:
     # Returns:
     # Hamiltonian change for the given step size
     def deltaH(self, dr, theta):
-        lam = np.sqrt(self.H[0,0]**2 + np.abs(self.H[0,1])**2)
         dl = dr*theta*5.076e6
-        dH = 1/lam*np.array([[lam*np.cos(lam*dl) - 1j*self.H[0,0]*np.sin(lam*dl), -1j*self.H[0,1]*np.sin(lam*dl)],[-1j*np.conj(self.H[0,1])*np.sin(lam*dl), lam*np.cos(lam*dl) + 1j*self.H[0,0]*np.sin(lam*dl)]])
+        dH = sp.linalg.expm(-1j*self.H*dl)
         return dH

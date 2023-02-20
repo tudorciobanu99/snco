@@ -7,7 +7,7 @@ class Neutrino:
     # Parameters:
     # E: neutrino energy
     # theta_0: initial angle
-    # kind: 'e' for electron neutrino, 'x' for either the mu or tau neutrino or a linear combniation of them
+    # kind: 'e' for electron neutrino, 'x' and 'y' for linear combinations of muon and tau neutrinos
     # 
     # Returns:
     # Neutrino object with the following attributes:
@@ -18,9 +18,11 @@ class Neutrino:
         self.E = E
         self.theta_0 = theta_0
         if kind == 'e':
-            self.psi = np.array([1,0])
+            self.psi = np.array([1,0,0])
+        elif kind == 'x':
+            self.psi = np.array([0,1,0])
         else:
-            self.psi = np.array([0,1])
+            self.psi = np.array([0,0,1])
     
     # String representation of the object
     #
@@ -51,7 +53,7 @@ class Neutrino:
     # Returns: 
     # Updated state vector
     def evolve(self, dH):
-        psi = np.matmul(dH, self.psi)
+        psi = np.dot(dH, self.psi)
         self.psi = psi
 
 
