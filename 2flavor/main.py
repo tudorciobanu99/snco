@@ -14,7 +14,7 @@ L = 0.4112e48
 constants = [deltam, thetam, R_nu, G_F, Y_e, L]
 
 # Initialize particles
-Es = np.arange(1e6, 31e6, 1e6)
+Es = np.arange(0.1e6, 31e6, 0.1e6)
 particles = np.zeros((4, len(Es)), dtype = object)
 for i in range(len(Es)):
     particles[0,i] = Neutrino(Es[i], 0, 'e')
@@ -51,9 +51,9 @@ def flavor_evolution(r0, dr, steps):
     return amplitude
 
 # Evolution
-steps = 100000
-dr = 1
-r0 = 11000*dr
+steps = 1000
+dr = 1e3
+r0 = 11*dr
 amplitude = flavor_evolution(r0, dr, steps)
 np.savetxt('neutrino_e.txt', amplitude[0,:,:])
 np.savetxt('antineutrino_e.txt', amplitude[1,:,:])
@@ -63,28 +63,17 @@ np.savetxt('antineutrino_x.txt', amplitude[3,:,:])
 r = np.arange(r0, r0+steps*dr, dr)
 # Is = np.zeros(len(r))
 # for i in range(len(r)):
-#     Is[i] = integrate.simps(amplitude[0,:,i]*hamiltonians[0,0].f(Es, 0), Es)
+#     Is[i] = integrate.simps(amplitude[:,i]*hamiltonians[0,0].f(Es, 0), Es)
+amplitude = np.loadtxt('neutrino_e.txt')
 
-# plt.xlim(0, 100)
-# plt.ylim(0, 1.1)
-# plt.plot(r*1e-3, amplitude[1,11,:], 'b-', label='$\\bar{\\nu}_e$')
-# plt.plot(r*1e-3, amplitude[2,11,:], 'k-', label='$\\nu_x$')
-# plt.plot(r*1e-3, amplitude[3,11,:], 'g-', label='$\\bar{\\nu}_x$')
-# plt.legend()
-# plt.xlabel('r (km)')
-# plt.ylabel('$ P_{\\nu_e \\to \\nu_e}$')
-# plt.savefig('test.png', dpi=300)
-# plt.show()
-
-
-# Plot
-# plt.plot(r, np.abs(psi[:,0])**2, label='$\\nu_e$')
-# plt.plot(r, np.repeat(np.sin(theta_12)**2*0.9, steps), 'r-')
-# # plt.plot(r, hamiltonian.n_e(r), label='$n_e$')
-# plt.xlabel('r (km)')
-# plt.ylabel('$ P_{\\nu_e \\to \\nu_e}$')
-# plt.savefig('prob.png', dpi=300)
-# plt.show()
+plt.ylim(0, 1)
+plt.xlim(11, 12)
+plt.plot(r*1e-3, amplitude[11,:], 'b-', label='$\\bar{\\nu}_e$')
+plt.legend()
+plt.xlabel('r (km)')
+plt.ylabel('$ P_{\\nu_e \\to \\nu_e}$')
+plt.savefig('test.png', dpi=300)
+plt.show()
         
 
 
