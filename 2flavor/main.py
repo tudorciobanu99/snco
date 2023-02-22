@@ -51,7 +51,7 @@ def flavor_evolution(r0, dr, steps):
     return amplitude
 
 # Evolution
-steps = 1000
+steps = 100
 dr = 1e3
 r0 = 11*dr
 amplitude = flavor_evolution(r0, dr, steps)
