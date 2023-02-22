@@ -37,7 +37,7 @@ def flavor_evolution(r0, dr, steps):
 # Evolution
 steps = 100000
 dr = 1e3
-r0 = 100*dr
+r0 = 11*dr
 psi = flavor_evolution(r0, dr, steps)
 
 # Energy distribution function
