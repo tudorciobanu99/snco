@@ -41,9 +41,9 @@ class Hamiltonian:
     # None, but updates the Hamiltonian to include matter effects
     def update_hamiltonian(self, r):
         if self.kind == 'neutrino':
-            self.H += 1e-18*np.sqrt(2)*self.G_F*self.n_e(r)*np.array([[1,0],[0,0]],dtype = np.complex_)
+            self.H += 1/2*1e-18*np.sqrt(2)*self.G_F*self.n_e(r)*np.array([[1,0],[0,-1]],dtype = np.complex_)
         else:
-            self.H -= 1e-18*np.sqrt(2)*self.G_F*self.n_e(r)*np.array([[1,0],[0,0]],dtype = np.complex_)
+            self.H -= 1/2*1e-18*np.sqrt(2)*self.G_F*self.n_e(r)*np.array([[1,0],[0,-1]],dtype = np.complex_)
 
 
     # Electron density
@@ -59,14 +59,16 @@ class Hamiltonian:
 
     def interaction(self, r, particles, Es):
         Eavg = [11e6, 16e6, 25e6]
-        H_int = np.sqrt(2)*self.G_F*1e-18/(2*np.pi*self.R_nu**2)*self.geometric_factor(r)*(np.trapz((particles[0,:]*self.f(Es, 0)*self.L/Eavg[0] - np.conjugate(particles[1,:])*self.f(Es, 1)*self.L/Eavg[1]),Es) + np.trapz((particles[2,:]*self.f(Es, 2)*self.L/Eavg[2] - np.conjugate(particles[3,:])*self.f(Es, 2)*self.L/Eavg[2]),Es))
+        Te = sp.integrate.simps((particles[0,:]*self.f(Es, 0)*self.L/Eavg[0] - np.conjugate(particles[1,:])*self.f(Es, 1)*self.L/Eavg[1]),Es)
+        Tx = sp.integrate.simps((particles[2,:]*self.f(Es, 2)*self.L/Eavg[2] - np.conjugate(particles[3,:])*self.f(Es, 2)*self.L/Eavg[2]),Es)
+        H_int = np.sqrt(2)*self.G_F*1e-18/(2*np.pi*self.R_nu**2)*self.geometric_factor(r)*(Te + Tx)
         if self.kind == 'neutrino':
             self.H += H_int
         else:
-            self.H -= H_int
+            self.H += np.array([[-H_int[0,0],-H_int[1,0]],[-H_int[0,1],-H_int[1,1]]], dtype = np.complex_)
     
     def geometric_factor(self, r):
-        D = 1/2*(1 - np.real(cmath.sqrt(1 - (self.R_nu/r)**2)))**2
+        D = 1/2*(1 - cmath.sqrt(1 - (self.R_nu/r)**2))**2
         return D
 
     def f(self, E, type):
