@@ -17,6 +17,7 @@ class Neutrino:
     def __init__(self, E, theta_0, kind):
         self.E = E
         self.theta_0 = theta_0
+        self.kind = kind
         if kind == 'e':
             self.psi = np.array([1,0], dtype=np.complex_)
         else:
@@ -44,7 +45,7 @@ class Neutrino:
         return np.cos(np.arcsin(R_nu/r*np.sin(self.theta_0)))
 
     def density_matrix(self):
-        rho = 1/2*np.array([[np.abs(self.psi[0])**2 - np.abs(self.psi[1])**2, 2*self.psi[0]*np.conjugate(self.psi[1])],[2*np.conjugate(self.psi[0])*self.psi[0], -np.abs(self.psi[0])**2 + np.abs(self.psi[1])**2]], dtype=np.complex_)
+        rho = 1/2*np.array([[np.abs(self.psi[0])**2 - np.abs(self.psi[1])**2, 2*self.psi[0]*np.conjugate(self.psi[1])],[2*np.conjugate(self.psi[0])*self.psi[1], -np.abs(self.psi[0])**2 + np.abs(self.psi[1])**2]], dtype=np.complex_)
         return rho
 
     # State evolution
