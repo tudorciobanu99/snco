@@ -68,8 +68,8 @@ class Hamiltonian:
     def interaction(self, r, densities, Es):
         Eavg = [11e6, 16e6, 25e6]
         self.L = self.L*erg_to_eV*inv_s_to_eV
-        Te = np.sum((densities[0,:]*self.f(Es, 0)*self.L/Eavg[0] - np.conjugate(densities[1,:])*self.f(Es, 1)*self.L/Eavg[1]), axis = 0)*0.1e6
-        Tx = np.sum((densities[2,:]*self.f(Es, 2)*self.L/Eavg[2] - np.conjugate(densities[3,:])*self.f(Es, 2)*self.L/Eavg[2]), axis = 0)*0.1e6
+        Te = np.sum((densities[0,:]*self.f(Es, 0)*self.L/Eavg[0] - np.conjugate(densities[1,:])*self.f(Es, 1)*self.L/Eavg[1]))*0.1e6
+        Tx = np.sum((densities[2,:]*self.f(Es, 2)*self.L/Eavg[2] - np.conjugate(densities[3,:])*self.f(Es, 2)*self.L/Eavg[2]))*0.1e6
 
         H = np.sqrt(2)*self.G_F/(2*np.pi*self.R_nu**2)*self.geometric_factor(r)*(Te + Tx)
         if self.kind == 'neutrino':
