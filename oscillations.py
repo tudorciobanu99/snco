@@ -168,7 +168,10 @@ for i in range(len(r)):
         rho_p_r_nu[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_p_r
         rho_p_r_nubar[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_pbar_r
 
-np.savetxt('test.csv', np.array([r,np.abs(rho_p_r_nu[:, 20, 0, 0]), np.abs(rho_p_r_nu[:, 20, 1, 1])]), delimiter = ',')
+P_ee = np.divide(rho_p_r_nu[:, 20, 0, 0], np.trace(rho_p_r_nu[:, 20, :, :], axis1 = 1, axis2 = 2))
+P_xx = np.divide(rho_p_r_nu[:, 20, 1, 1], np.trace(rho_p_r_nu[:, 20, :, :], axis1 = 1, axis2 = 2))
+
+np.savetxt('test.csv', np.array([r,P_ee, P_xx]), delimiter = ',')
 
 # Multi-angle simulations
 def v_u(r, u):
