@@ -133,11 +133,11 @@ def derivs(r, P, p, hierarchy, F_nubar_e, F_nubar_x):
     dPdt = dPdt.flatten()
     return dPdt    
 
-def solve(p, r, hierarchy, A):
+def solve(p, r, r_eval, hierarchy, A):
     P_p0, P_pbar0, F_nubar_e, F_nubar_x = init(p, A)
     P = np.vstack((P_p0, P_pbar0))
     P = P.flatten()
-    sol = solve_ivp(derivs, r, P, args = (p, hierarchy, F_nubar_e, F_nubar_x), method="LSODA")
+    sol = solve_ivp(derivs, r, P, args = (p, hierarchy, F_nubar_e, F_nubar_x), method="RK45", t_eval=r_eval)
     return sol, F_nubar_e, F_nubar_x
 
 p = np.arange(0.1, 51.1, 1)*1e6
@@ -148,10 +148,11 @@ A_nubar_x = np.trapz(f(p, E_avg_an_x, alpha), x = p)
 A = np.array([A_nu_e, A_nu_x, A_nubar_e, A_nubar_x])
 
 r_i = 30/inv_km_to_eV
-r_f = 35/inv_km_to_eV
+r_f = 40/inv_km_to_eV
 r = [r_i, r_f]
+r_eval = np.arange(30, 40, 0.1)/inv_km_to_eV
 hierarchy = 'inverted'
-sol, F_nubar_e, F_nubar_x = solve(p, r, hierarchy, A)
+sol, F_nubar_e, F_nubar_x = solve(p, r, r_eval, hierarchy, A)
 r = sol.t
 sol = sol.y
 P_nu = np.zeros((len(r), len(p), 3))
