@@ -127,8 +127,8 @@ def derivs(r, P, p, hierarchy, F_nubar_e, F_nubar_x):
     rhs_nu = np.zeros((len(p), 3))
     rhs_nubar = np.zeros((len(p), 3))
     for i in range(len(p)):
-        rhs_nu[i] = np.cross(omega_p(p[i])*B_array(hierarchy) + mu_r_eff(F_nubar_e, F_nubar_x, r)*D_array(P_nu, Pbar_nu), P_p_nu[i,:])
-        rhs_nubar[i] = np.cross(-omega_p(p[i])*B_array(hierarchy) + mu_r_eff(F_nubar_e, F_nubar_x, r)*D_array(P_nu, Pbar_nu), P_pbar_nu[i,:])
+        rhs_nu[i] = np.cross(omega_p(p[i])*B_array(hierarchy), P_p_nu[i,:])
+        rhs_nubar[i] = np.cross(-omega_p(p[i])*B_array(hierarchy), P_pbar_nu[i,:])
     dPdt = np.vstack((rhs_nu, rhs_nubar))
     dPdt = dPdt.flatten()
     return dPdt    
@@ -137,7 +137,7 @@ def solve(p, r, r_eval, hierarchy, A):
     P_p0, P_pbar0, F_nubar_e, F_nubar_x = init(p, A)
     P = np.vstack((P_p0, P_pbar0))
     P = P.flatten()
-    sol = solve_ivp(derivs, r, P, args = (p, hierarchy, F_nubar_e, F_nubar_x), method="RK45", t_eval=r_eval)
+    sol = solve_ivp(derivs, r, P, args = (p, hierarchy, F_nubar_e, F_nubar_x), method="RK45")
     return sol, F_nubar_e, F_nubar_x
 
 p = np.arange(0.1, 51.1, 1)*1e6
@@ -148,7 +148,7 @@ A_nubar_x = np.trapz(f(p, E_avg_an_x, alpha), x = p)
 A = np.array([A_nu_e, A_nu_x, A_nubar_e, A_nubar_x])
 
 r_i = 30/inv_km_to_eV
-r_f = 40/inv_km_to_eV
+r_f = 100/inv_km_to_eV
 r = [r_i, r_f]
 r_eval = np.arange(30, 40, 0.1)/inv_km_to_eV
 hierarchy = 'inverted'
@@ -162,14 +162,15 @@ for i in range(len(r)):
     P_nu[i, :, :] = np.reshape(P_nu_temp, (len(p), 3))
     P_nubar[i, :, :] = np.reshape(P_nubar_temp, (len(p), 3))
 
-# rho_p_r_nu = np.zeros((len(r), len(p), 2, 2), dtype = complex)
-# rho_p_r_nubar = np.zeros((len(r), len(p), 2, 2), dtype = complex)
-# for i in range(len(r)):
-#     for j in range(len(p)):
-#         rho_p_r_nu[i, j, :, :] = 2*np.pi/(p[j]**2*R**2)*inv_km_to_eV**2*(1/2*np.identity(2)*(2.4*F_p(p[j], E_avg_n_e, alpha, L_n_e)/A[0] + F_p(p[j], E_avg_n_x, alpha, L_n_x)/A[1]) + 1/2*(P_nu[i,j,0]*sigma_x + P_nu[i,j,1]*sigma_y + P_nu[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x))
-#         rho_p_r_nubar[i, j, :, :] = 2*np.pi/(p[j]**2*R**2)*inv_km_to_eV**2*(1/2*np.identity(2)*(1.6*F_p(p[j], E_avg_an_e, alpha, L_an_e)/A[2] + F_p(p[j], E_avg_an_x, alpha, L_an_x)/A[3]) + 1/2*(P_nubar[i,j,0]*sigma_x + P_nubar[i,j,1]*sigma_y + P_nubar[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x))
+rho_p_r_nu = np.zeros((len(r), len(p), 2, 2), dtype = complex)
+rho_p_r_nubar = np.zeros((len(r), len(p), 2, 2), dtype = complex)
+print(len(r))
+for i in range(len(r)):
+    for j in range(len(p)):
+        rho_p_r_nu[i, j, :, :] = 2*np.pi/(p[j]**2*R**2)*inv_km_to_eV**2*(1/2*np.identity(2)*(2.4*F_p(p[j], E_avg_n_e, alpha, L_n_e)/A[0] + F_p(p[j], E_avg_n_x, alpha, L_n_x)/A[1]) + 1/2*(P_nu[i,j,0]*sigma_x + P_nu[i,j,1]*sigma_y + P_nu[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x))
+        rho_p_r_nubar[i, j, :, :] = 2*np.pi/(p[j]**2*R**2)*inv_km_to_eV**2*(1/2*np.identity(2)*(1.6*F_p(p[j], E_avg_an_e, alpha, L_an_e)/A[2] + F_p(p[j], E_avg_an_x, alpha, L_an_x)/A[3]) + 1/2*(P_nubar[i,j,0]*sigma_x + P_nubar[i,j,1]*sigma_y + P_nubar[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x))
 
-np.savetxt('test.csv', np.array([r,np.trapz(P_nu[:,:,2], p, axis = 1)]), delimiter = ',')
+np.savetxt('test.csv', np.array([r,np.abs(rho_p_r_nu[:, 20, 0, 0])**2]), delimiter = ',')
 
 # Multi-angle simulations
 def v_u(r, u):
