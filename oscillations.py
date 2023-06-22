@@ -62,10 +62,11 @@ def mu_r_eff(F_nubar_e, F_nubar_x, r):
     return mu_r_eff
 
 def lambda_r(r):
-    n_b = n_b0*inv_cm3_to_eV3*np.exp(-(r - R)/h_NS)
-    n_e = Y_e*n_b
-    lambda_r = np.sqrt(2)*G_F*n_e
-    return lambda_r*0
+    # n_b = n_b0*inv_cm3_to_eV3*np.exp(-(r - R)/h_NS)
+    # n_e = Y_e*n_b
+    # lambda_r = np.sqrt(2)*G_F*n_e
+    lambda_r = 1.9e6*inv_km_to_eV*(Y_e/0.5)*(rho(r, 1))/(1e10)
+    return lambda_r
 
 def f(E, E_avg, alpha):
     f = (E/E_avg)**alpha*np.exp(-(alpha + 1)*E/E_avg)
@@ -88,14 +89,51 @@ def P_vec(P_p, p):
     P = np.trapz(P_p, x = p, axis = 0)
     return P
 
+def rho(r,t):
+# r[km],t[s]
+#https://arxiv.org/abs/hep-ph/0304056
+    r=np.array(r)
+    rho_0=10**14*(r**(-2.4)) #g/cm³
+    if t <1:
+        return rho_0
+    
+    else:
+        epsilon=10
+        #r_s=50 #km
+        r_s0=-4.6*10**3 #km - Shockwave initial position
+        v_s=11.3*10**3 #km/s - Shockwave initial velocity
+        a_s=0.2*10**3 #km/s² - Shockwave aceleration
+        r_s=r_s0+v_s*t+1/2*a_s*t**2 #Shockwave position
+        #print(r_s)
+        rho = 0
+        if r<=r_s:
+            aux=(0.28-0.69*np.log(r))*(np.arcsin(1-r/r_s)**1.1)
+            f=np.exp(aux)
+            rho = epsilon*f*rho_0
+        else:
+            rho = rho_0
+        return rho
+    
+def rk4(f, u0, t0, tf , n, p, hierarchy, F_nubar_e, F_nubar_x):
+    t = np.linspace(t0, tf, n+1)
+    u = np.array((n+1)*[u0])
+    h = t[1]-t[0]
+    for i in range(n):
+        k1 = h * f(t[i], u[i], p, hierarchy, F_nubar_e, F_nubar_x)    
+        k2 = h * f(t[i] + 0.5*h, u[i] + 0.5 * k1, p, hierarchy, F_nubar_e, F_nubar_x)
+        k3 = h * f(t[i] + 0.5*h, u[i] + 0.5 * k2, p, hierarchy, F_nubar_e, F_nubar_x)
+        k4 = h * f(t[i] + h, u[i] + k3, p, hierarchy, F_nubar_e, F_nubar_x)
+        u[i+1] = u[i] + (k1 + 2*(k2 + k3) + k4) / 6
+    return u, t
+
 # Initial conditions
 def init(p, A):
-    P_p0 = np.zeros((len(p), 3))
-    P_pbar0 = np.zeros((len(p), 3))
-    F_p_nu_e = np.zeros(len(p))
-    F_p_nu_x = np.zeros(len(p))
-    F_p_nubar_e = np.zeros(len(p))
-    F_p_nubar_x = np.zeros(len(p))
+    P_p0 = np.zeros((len(p), 3), dtype=np.float64)
+    P_pbar0 = np.zeros((len(p), 3), dtype=np.float64)
+    F_p_nu_e = np.zeros(len(p), dtype=np.float64)
+    F_p_nu_x = np.zeros(len(p), dtype=np.float64)
+    F_p_nubar_e = np.zeros(len(p), dtype=np.float64)
+    F_p_nubar_x = np.zeros(len(p), dtype=np.float64)
     for i in range(len(p)):
         F_p_nu_e[i] = F_p(p[i], E_avg_n_e, alpha, L_n_e)/A[0]
         F_p_nu_x[i] = F_p(p[i], E_avg_n_x, alpha, L_n_x)/A[1]
@@ -123,8 +161,8 @@ def derivs(r, P, p, hierarchy, F_nubar_e, F_nubar_x):
     rhs_nu = np.zeros((len(p), 3))
     rhs_nubar = np.zeros((len(p), 3))
     for i in range(len(p)):
-        rhs_nu[i] = np.cross(omega_p(p[i])*B_array(hierarchy), P_p_nu[i,:])
-        rhs_nubar[i] = np.cross(-omega_p(p[i])*B_array(hierarchy), P_pbar_nu[i,:])
+        rhs_nu[i] = np.cross(omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*L_array(), P_p_nu[i,:])
+        rhs_nubar[i] = np.cross(-omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*L_array(), P_pbar_nu[i,:])
     dPdt = np.vstack((rhs_nu, rhs_nubar))
     dPdt = dPdt.flatten()
     return dPdt    
@@ -134,6 +172,7 @@ def solve(p, r, r_eval, hierarchy, A):
     P = np.vstack((P_p0, P_pbar0))
     P = P.flatten()
     sol = solve_ivp(derivs, r, P, args = (p, hierarchy, F_nubar_e, F_nubar_x), method="RK45")
+    #sol = rk4(derivs, P, r[0], r[-1] , 5000, p, hierarchy, F_nubar_e, F_nubar_x)
     return sol, F_nubar_e, F_nubar_x
 
 p = np.arange(0.1, 51.1, 1)*1e6
@@ -144,23 +183,28 @@ A_nubar_x = np.trapz(f(p, E_avg_an_x, alpha), x = p)
 A = np.array([A_nu_e, A_nu_x, A_nubar_e, A_nubar_x])
 
 r_i = 30/inv_km_to_eV
-r_f = 100/inv_km_to_eV
+r_f = 30.01/inv_km_to_eV
 r = [r_i, r_f]
 r_eval = np.arange(30, 40, 0.1)/inv_km_to_eV
 hierarchy = 'inverted'
 sol, F_nubar_e, F_nubar_x = solve(p, r, r_eval, hierarchy, A)
 r = sol.t
 sol = sol.y
+# r = sol[0]
+# sol = sol[1]
 P_nu = np.zeros((len(r), len(p), 3))
 P_nubar = np.zeros((len(r), len(p), 3))
 for i in range(len(r)):
     P_nu_temp, P_nubar_temp = np.split(np.array(sol[:,i]), 2)
     P_nu[i, :, :] = np.reshape(P_nu_temp, (len(p), 3))
     P_nubar[i, :, :] = np.reshape(P_nubar_temp, (len(p), 3))
+# for i in range(len(r)):
+#     P_nu_temp, P_nubar_temp = np.split(np.array(sol[i,:]), 2)
+#     P_nu[i, :, :] = np.reshape(P_nu_temp, (len(p), 3))
+#     P_nubar[i, :, :] = np.reshape(P_nubar_temp, (len(p), 3))
 
 rho_p_r_nu = np.zeros((len(r), len(p), 2, 2), dtype = complex)
 rho_p_r_nubar = np.zeros((len(r), len(p), 2, 2), dtype = complex)
-print(len(r))
 for i in range(len(r)):
     for j in range(len(p)):
         J_p_r = 1/2*np.identity(2)*(F_p(p[j], E_avg_n_e, alpha, L_n_e)/A[0] + F_p(p[j], E_avg_n_x, alpha, L_n_x)/A[1]) + 1/2*(P_nu[i,j,0]*sigma_x + P_nu[i,j,1]*sigma_y + P_nu[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x)
