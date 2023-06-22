@@ -12,7 +12,6 @@ sin_theta_13_sq = 2.18e-2 # dimensionless
 sin_theta_23_sq = 4.37e-1 # dimensionless
 theta_13 = np.arcsin(np.sqrt(sin_theta_13_sq)) # radians
 Delta_m_sq = 2.43e-3 # eV^2
-m_SN = 27*1.989e33 # g
 R = 30 # km
 L_an_e = 1e52 # erg/s
 L_an_x = 1e52 # erg/s
@@ -89,12 +88,6 @@ def P_vec(P_p, p):
     P = np.trapz(P_p, x = p, axis = 0)
     return P
 
-def phi(E,E_0,alpha):
-  N=((alpha+1)**(alpha+1))/(E_0*gamma(alpha+1))
-  R=N*((E/E_0)**alpha)*math.exp((-1)*(alpha+1)*E/E_0)
-  return R
-phi_vec= np.vectorize(phi)
-
 # Initial conditions
 def init(p, A):
     P_p0 = np.zeros((len(p), 3))
@@ -104,16 +97,21 @@ def init(p, A):
     F_p_nubar_e = np.zeros(len(p))
     F_p_nubar_x = np.zeros(len(p))
     for i in range(len(p)):
-        F_p_nu_e[i] = 2.4*F_p(p[i], E_avg_n_e, alpha, L_n_e)/A[0]
-        F_p_nu_x[i] = 1*F_p(p[i], E_avg_n_x, alpha, L_n_x)/A[1]
-        F_p_nubar_e[i] = 1.6*F_p(p[i], E_avg_an_e, alpha, L_an_e)/A[2]
-        F_p_nubar_x[i] = 1*F_p(p[i], E_avg_an_x, alpha, L_an_x)/A[3]
-    F_nubar_e = F(F_p_nubar_e*u, p)
-    F_nubar_x = F(F_p_nubar_x*u, p)
+        F_p_nu_e[i] = F_p(p[i], E_avg_n_e, alpha, L_n_e)/A[0]
+        F_p_nu_x[i] = F_p(p[i], E_avg_n_x, alpha, L_n_x)/A[1]
+        F_p_nubar_e[i] = F_p(p[i], E_avg_an_e, alpha, L_an_e)/A[2]
+        F_p_nubar_x[i] = F_p(p[i], E_avg_an_x, alpha, L_an_x)/A[3]
+    F_nu_e = F(F_p_nu_e*u, p)
+    F_nu_x = F(F_p_nu_x*u, p)
+    F_nubar_e = F(F_p_nubar_e, p)
+    F_nubar_x = F(F_p_nubar_x, p)
+    print(F_nu_e/F_nu_x)
+    print(F_nubar_e/F_nu_x)
 
     for i in range(len(p)):
         P_p0[i, :] = [0, 0, (F_p_nu_e[i] - F_p_nu_x[i])/(F_nubar_e - F_nubar_x)]
         P_pbar0[i, :] = [0, 0, (F_p_nubar_e[i] - F_p_nubar_x[i])/(F_nubar_e - F_nubar_x)]
+
     return P_p0, P_pbar0, F_nubar_e, F_nubar_x
 
 def derivs(r, P, p, hierarchy, F_nubar_e, F_nubar_x):
@@ -122,8 +120,6 @@ def derivs(r, P, p, hierarchy, F_nubar_e, F_nubar_x):
     P_p_nu, P_pbar_nu = np.split(P, 2)
     P_p_nu = P_p_nu.reshape((len(p), 3))
     P_pbar_nu = P_pbar_nu.reshape((len(p), 3))
-    P_nu = P_vec(P_p_nu, p)
-    Pbar_nu = P_vec(P_pbar_nu, p)
     rhs_nu = np.zeros((len(p), 3))
     rhs_nubar = np.zeros((len(p), 3))
     for i in range(len(p)):
@@ -167,10 +163,12 @@ rho_p_r_nubar = np.zeros((len(r), len(p), 2, 2), dtype = complex)
 print(len(r))
 for i in range(len(r)):
     for j in range(len(p)):
-        rho_p_r_nu[i, j, :, :] = 2*np.pi/(p[j]**2*R**2)*inv_km_to_eV**2*(1/2*np.identity(2)*(2.4*F_p(p[j], E_avg_n_e, alpha, L_n_e)/A[0] + F_p(p[j], E_avg_n_x, alpha, L_n_x)/A[1]) + 1/2*(P_nu[i,j,0]*sigma_x + P_nu[i,j,1]*sigma_y + P_nu[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x))
-        rho_p_r_nubar[i, j, :, :] = 2*np.pi/(p[j]**2*R**2)*inv_km_to_eV**2*(1/2*np.identity(2)*(1.6*F_p(p[j], E_avg_an_e, alpha, L_an_e)/A[2] + F_p(p[j], E_avg_an_x, alpha, L_an_x)/A[3]) + 1/2*(P_nubar[i,j,0]*sigma_x + P_nubar[i,j,1]*sigma_y + P_nubar[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x))
+        J_p_r = 1/2*np.identity(2)*(F_p(p[j], E_avg_n_e, alpha, L_n_e)/A[0] + F_p(p[j], E_avg_n_x, alpha, L_n_x)/A[1]) + 1/2*(P_nu[i,j,0]*sigma_x + P_nu[i,j,1]*sigma_y + P_nu[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x)
+        J_pbar_r = 1/2*np.identity(2)*(F_p(p[j], E_avg_an_e, alpha, L_an_e)/A[2] + F_p(p[j], E_avg_an_x, alpha, L_an_x)/A[3]) + 1/2*(P_nubar[i,j,0]*sigma_x + P_nubar[i,j,1]*sigma_y + P_nubar[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x)
+        rho_p_r_nu[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_p_r
+        rho_p_r_nubar[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_pbar_r
 
-np.savetxt('test.csv', np.array([r,np.abs(rho_p_r_nu[:, 20, 0, 0])**2]), delimiter = ',')
+np.savetxt('test.csv', np.array([r,np.abs(rho_p_r_nu[:, 20, 0, 0]), np.abs(rho_p_r_nu[:, 20, 1, 1])]), delimiter = ',')
 
 # Multi-angle simulations
 def v_u(r, u):
