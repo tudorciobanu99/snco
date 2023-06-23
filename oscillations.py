@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
+from scipy.integrate import odeint
 from scipy.special import gamma
 import math
 
@@ -52,8 +53,8 @@ def L_array():
     return L
 
 def mu_r(F_nubar_e, F_nubar_x, r):
-    #mu_r = 7.0e5*inv_km_to_eV*(L_an_e/E_avg_an_e - L_an_x/E_avg_an_x)*15e6/1e52*(10/r)**2
-    mu_r = np.sqrt(2)*G_F*(F_nubar_e - F_nubar_x)/(4*np.pi*R**2)*inv_km_to_eV**2
+    mu_r = 7.0e5*inv_km_to_eV*(L_an_e/E_avg_an_e - L_an_x/E_avg_an_x)*15e6/1e52*(10/r)**2
+    #mu_r = np.sqrt(2)*G_F*(F_nubar_e - F_nubar_x)/(4*np.pi*R**2)*inv_km_to_eV**2
     return mu_r
 
 def mu_r_eff(F_nubar_e, F_nubar_x, r):
@@ -62,10 +63,8 @@ def mu_r_eff(F_nubar_e, F_nubar_x, r):
     return mu_r_eff
 
 def lambda_r(r):
-    # n_b = n_b0*inv_cm3_to_eV3*np.exp(-(r - R)/h_NS)
-    # n_e = Y_e*n_b
-    # lambda_r = np.sqrt(2)*G_F*n_e
-    lambda_r = 1.9e6*inv_km_to_eV*(Y_e/0.5)*(rho(r, 1))/(1e10)
+    t = 0.2
+    lambda_r = 7.6e-8*Y_e*rho(r, t)*1e-6
     return lambda_r
 
 def f(E, E_avg, alpha):
@@ -93,26 +92,22 @@ def rho(r,t):
 # r[km],t[s]
 #https://arxiv.org/abs/hep-ph/0304056
     r=np.array(r)
-    rho_0=10**14*(r**(-2.4)) #g/cm³
-    if t <1:
-        return rho_0
-    
+    epsilon = 10
+    rho_0=1e14*(r**(-2.4)) #g/cm³
+    r_s0 = -4.6e3
+    v_s = 11.3e3
+    a_s = 0.2e3
+    r_s = r_s0 + v_s*t + 1/2*a_s*t**2
+    rho = 0
+    if t <= 1:
+        rho = rho_0
     else:
-        epsilon=10
-        #r_s=50 #km
-        r_s0=-4.6*10**3 #km - Shockwave initial position
-        v_s=11.3*10**3 #km/s - Shockwave initial velocity
-        a_s=0.2*10**3 #km/s² - Shockwave aceleration
-        r_s=r_s0+v_s*t+1/2*a_s*t**2 #Shockwave position
-        #print(r_s)
-        rho = 0
-        if r<=r_s:
-            aux=(0.28-0.69*np.log(r))*(np.arcsin(1-r/r_s)**1.1)
-            f=np.exp(aux)
-            rho = epsilon*f*rho_0
-        else:
+        if r > r_s:
             rho = rho_0
-        return rho
+        else:
+            f = np.exp((0.28 - 0.69*np.ln(r_s))*np.arcsin(1 - r/r_s))
+            rho = rho_0*epsilon*f
+    return rho
     
 def rk4(f, u0, t0, tf , n, p, hierarchy, F_nubar_e, F_nubar_x):
     t = np.linspace(t0, tf, n+1)
@@ -139,8 +134,8 @@ def init(p, A):
         F_p_nu_x[i] = F_p(p[i], E_avg_n_x, alpha, L_n_x)/A[1]
         F_p_nubar_e[i] = F_p(p[i], E_avg_an_e, alpha, L_an_e)/A[2]
         F_p_nubar_x[i] = F_p(p[i], E_avg_an_x, alpha, L_an_x)/A[3]
-    F_nu_e = F(F_p_nu_e*u, p)
-    F_nu_x = F(F_p_nu_x*u, p)
+    F_nu_e = F(F_p_nu_e, p)
+    F_nu_x = F(F_p_nu_x, p)
     F_nubar_e = F(F_p_nubar_e, p)
     F_nubar_x = F(F_p_nubar_x, p)
     print(F_nu_e/F_nu_x)
@@ -152,26 +147,29 @@ def init(p, A):
 
     return P_p0, P_pbar0, F_nubar_e, F_nubar_x
 
-def derivs(r, P, p, hierarchy, F_nubar_e, F_nubar_x):
+def derivs(P, r, p, hierarchy, F_nubar_e, F_nubar_x):
     r = r*inv_km_to_eV
     print('Progress: r = ' + str(r))
     P_p_nu, P_pbar_nu = np.split(P, 2)
     P_p_nu = P_p_nu.reshape((len(p), 3))
     P_pbar_nu = P_pbar_nu.reshape((len(p), 3))
+    P_nu = np.trapz(P_p_nu, p, axis=0)
+    P_nubar = np.trapz(P_pbar_nu, p, axis=0)
     rhs_nu = np.zeros((len(p), 3))
     rhs_nubar = np.zeros((len(p), 3))
     for i in range(len(p)):
-        rhs_nu[i] = np.cross(omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*L_array(), P_p_nu[i,:])
-        rhs_nubar[i] = np.cross(-omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*L_array(), P_pbar_nu[i,:])
+        rhs_nu[i] = np.cross(omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*0*L_array() + mu_r_eff(F_nubar_e, F_nubar_x, r)*D_array(P_nu, P_nubar), P_p_nu[i,:])
+        rhs_nubar[i] = np.cross(-omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*0*L_array() + mu_r_eff(F_nubar_e, F_nubar_x, r)*D_array(P_nu, P_nubar), P_pbar_nu[i,:])
     dPdt = np.vstack((rhs_nu, rhs_nubar))
     dPdt = dPdt.flatten()
     return dPdt    
 
-def solve(p, r, r_eval, hierarchy, A):
+def solve(p, r, r_eval, hierarchy, A, hmax):
     P_p0, P_pbar0, F_nubar_e, F_nubar_x = init(p, A)
     P = np.vstack((P_p0, P_pbar0))
     P = P.flatten()
-    sol = solve_ivp(derivs, r, P, args = (p, hierarchy, F_nubar_e, F_nubar_x), method="RK45", t_eval = r_eval, rtol = 1e-6, atol = 1e-6)
+    # sol = solve_ivp(derivs, r, P, args = (p, hierarchy, F_nubar_e, F_nubar_x), method="RK45")
+    sol = odeint(derivs, P, r_eval, args = (p, hierarchy, F_nubar_e, F_nubar_x), hmax = hmax)
     return sol, F_nubar_e, F_nubar_x
 
 p = np.arange(0.1, 51.1, 1)*1e6
@@ -182,17 +180,36 @@ A_nubar_x = np.trapz(f(p, E_avg_an_x, alpha), x = p)
 A = np.array([A_nu_e, A_nu_x, A_nubar_e, A_nubar_x])
 
 r_i = 30/inv_km_to_eV
-r_f = 35/inv_km_to_eV
+r_f = 250/inv_km_to_eV
 r = [r_i, r_f]
-r_eval = np.arange(30, 35, 1e-3)/inv_km_to_eV
+hmax = (2*np.pi/max(omega_p(p)))/20
+r_eval = np.arange(r_i, r_f, hmax)
+
+
+P_p0, P_pbar0, F_nubar_e, F_nubar_x = init(p, A)
+
+plt.figure()
+plt.plot(r_eval*inv_km_to_eV, mu_r_eff(F_nubar_e, F_nubar_x, r_eval*inv_km_to_eV), 'r-')
+plt.plot(r_eval*inv_km_to_eV, [lambda_r(x*inv_km_to_eV) for x in r_eval], 'b-')
+plt.plot(r_eval*inv_km_to_eV, np.repeat(omega_p(p[0]), len(r_eval)), 'g-')
+plt.plot(r_eval*inv_km_to_eV, np.repeat(omega_p(p[-1]), len(r_eval)), 'g-')
+plt.yscale('log')
+plt.show()
+
 hierarchy = 'inverted'
-sol, F_nubar_e, F_nubar_x = solve(p, r, r_eval, hierarchy, A)
-r = sol.t
-sol = sol.y
+sol, F_nubar_e, F_nubar_x = solve(p, r, r_eval, hierarchy, A, hmax)
+# r = sol.t
+# sol = sol.y
+r = r_eval
+
 P_nu = np.zeros((len(r), len(p), 3))
 P_nubar = np.zeros((len(r), len(p), 3))
+# for i in range(len(r)):
+#     P_nu_temp, P_nubar_temp = np.split(np.array(sol[:,i]), 2)
+#     P_nu[i, :, :] = np.reshape(P_nu_temp, (len(p), 3))
+#     P_nubar[i, :, :] = np.reshape(P_nubar_temp, (len(p), 3))
 for i in range(len(r)):
-    P_nu_temp, P_nubar_temp = np.split(np.array(sol[:,i]), 2)
+    P_nu_temp, P_nubar_temp = np.split(np.array(sol[i,:]), 2)
     P_nu[i, :, :] = np.reshape(P_nu_temp, (len(p), 3))
     P_nubar[i, :, :] = np.reshape(P_nubar_temp, (len(p), 3))
 rho_p_r_nu = np.zeros((len(r), len(p), 2, 2), dtype = complex)
@@ -204,10 +221,16 @@ for i in range(len(r)):
         rho_p_r_nu[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_p_r
         rho_p_r_nubar[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_pbar_r
 
-P_ee = np.divide(rho_p_r_nu[:, 20, 0, 0], np.trace(rho_p_r_nu[:, 20, :, :], axis1 = 1, axis2 = 2))
-P_xx = np.divide(rho_p_r_nu[:, 20, 1, 1], np.trace(rho_p_r_nu[:, 20, :, :], axis1 = 1, axis2 = 2))
+P_ee = np.divide(rho_p_r_nu[:, 0, 0, 0], np.trace(rho_p_r_nu[:, 0, :, :], axis1 = 1, axis2 = 2))
+P_xx = np.divide(rho_p_r_nu[:, 0, 1, 1], np.trace(rho_p_r_nu[:, 0, :, :], axis1 = 1, axis2 = 2))
 
-np.savetxt('test.csv', np.array([r,P_ee, P_xx]), delimiter = ',')
+plt.figure()
+plt.plot(r*inv_km_to_eV, P_ee, label = r'$P_{ee}$')
+plt.plot(r*inv_km_to_eV, P_xx, label = r'$P_{xx}$')
+plt.xlabel(r'$r$ [eV$^{-1}$]')
+plt.ylabel(r'$P_{ee}, P_{xx}$')
+plt.legend()
+plt.show()
 
 # Multi-angle simulations
 def v_u(r, u):
