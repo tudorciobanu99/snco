@@ -109,18 +109,6 @@ def rho(r,t):
             f = np.exp((0.28 - 0.69*np.ln(r_s))*np.arcsin(1 - r/r_s))
             rho = rho_0*epsilon*f
     return rho
-    
-def rk4(f, u0, t0, tf , n, p, hierarchy, F_nubar_e, F_nubar_x):
-    t = np.linspace(t0, tf, n+1)
-    u = np.array((n+1)*[u0])
-    h = t[1]-t[0]
-    for i in range(n):
-        k1 = h * f(t[i], u[i], p, hierarchy, F_nubar_e, F_nubar_x)    
-        k2 = h * f(t[i] + 0.5*h, u[i] + 0.5 * k1, p, hierarchy, F_nubar_e, F_nubar_x)
-        k3 = h * f(t[i] + 0.5*h, u[i] + 0.5 * k2, p, hierarchy, F_nubar_e, F_nubar_x)
-        k4 = h * f(t[i] + h, u[i] + k3, p, hierarchy, F_nubar_e, F_nubar_x)
-        u[i+1] = u[i] + (k1 + 2*(k2 + k3) + k4) / 6
-    return u, t
 
 # Initial conditions
 def init(p, A):
@@ -139,8 +127,6 @@ def init(p, A):
     F_nu_x = F(F_p_nu_x, p)
     F_nubar_e = F(F_p_nubar_e, p)
     F_nubar_x = F(F_p_nubar_x, p)
-    print(F_nu_e/F_nu_x)
-    print(F_nubar_e/F_nu_x)
 
     for i in range(len(p)):
         P_p0[i, :] = [0, 0, (F_p_nu_e[i] - F_p_nu_x[i])/(F_nubar_e - F_nubar_x)]
@@ -150,7 +136,6 @@ def init(p, A):
 
 def derivs(P, r, p, hierarchy, F_nubar_e, F_nubar_x):
     r = r*inv_km_to_eV
-    print('Progress: r = ' + str(r))
     P_p_nu, P_pbar_nu = np.split(P, 2)
     P_p_nu = P_p_nu.reshape((len(p), 3))
     P_pbar_nu = P_pbar_nu.reshape((len(p), 3))
@@ -169,9 +154,23 @@ def solve(p, r, r_eval, hierarchy, A, hmax):
     P_p0, P_pbar0, F_nubar_e, F_nubar_x = init(p, A)
     P = np.vstack((P_p0, P_pbar0))
     P = P.flatten()
-    # sol = solve_ivp(derivs, r, P, args = (p, hierarchy, F_nubar_e, F_nubar_x), method="RK45")
-    sol = odeint(derivs, P, r_eval, args = (p, hierarchy, F_nubar_e, F_nubar_x), hmax = hmax)
-    return sol, F_nubar_e, F_nubar_x
+    packet = 20
+    packet_size = int(len(r_eval)/packet)
+    for i in range(packet):
+        print('Packet ' + str(i+1) + ' out of ' + str(packet) + ' in progress.')
+        sol = odeint(derivs, P, r_eval[i*packet_size:(i+1)*packet_size], args = (p, hierarchy, F_nubar_e, F_nubar_x), hmax = hmax)
+        P = sol[:,-1]
+        print('Packet ' + str(i+1) + ' out of ' + str(packet) + ' completed.')
+        P_nu = np.zeros((packet_size, len(p), 3))
+        P_nubar = np.zeros((packet_size, len(p), 3))
+        for i in range(packet_size):
+            P_nu_temp, P_nubar_temp = np.split(np.array(sol[:,i]), 2)
+            P_nu[i, :, :] = np.reshape(P_nu_temp, (len(p), 3))
+            P_nubar[i, :, :] = np.reshape(P_nubar_temp, (len(p), 3))
+        np.save('P_nu_' + str(i+1) + '.csv', P_nu)
+        np.save('P_nubar_' + str(i+1) + '.csv', P_nubar)
+        print('Packet ' + str(i+1) + ' out of ' + str(packet) + ' saved.')
+    #sol = odeint(derivs, P, r_eval, args = (p, hierarchy, F_nubar_e, F_nubar_x), hmax = hmax)
 
 p = np.arange(0.1, 51.1, 1)*1e6
 A_nu_e = np.trapz(f(p, E_avg_n_e, alpha), x = p)
@@ -181,7 +180,7 @@ A_nubar_x = np.trapz(f(p, E_avg_an_x, alpha), x = p)
 A = np.array([A_nu_e, A_nu_x, A_nubar_e, A_nubar_x])
 
 r_i = 30/inv_km_to_eV
-r_f = 400/inv_km_to_eV
+r_f = 3600/inv_km_to_eV
 r = [r_i, r_f]
 hmax = (2*np.pi/max(omega_p(p)))/20
 r_eval = np.arange(r_i, r_f, hmax)
@@ -200,42 +199,39 @@ r_eval = np.arange(r_i, r_f, hmax)
 hierarchy = 'inverted'
 print('Starting solver...')
 start_time = time.time()
-sol, F_nubar_e, F_nubar_x = solve(p, r, r_eval, hierarchy, A, hmax)
+solve(p, r, r_eval, hierarchy, A, hmax)
 print("--- %s seconds ---" % (time.time() - start_time))
 # r = sol.t
 # sol = sol.y
 r = r_eval
 
-P_nu = np.zeros((len(r), len(p), 3))
-P_nubar = np.zeros((len(r), len(p), 3))
+# P_nu = np.zeros((len(r), len(p), 3))
+# P_nubar = np.zeros((len(r), len(p), 3))
 # for i in range(len(r)):
 #     P_nu_temp, P_nubar_temp = np.split(np.array(sol[:,i]), 2)
 #     P_nu[i, :, :] = np.reshape(P_nu_temp, (len(p), 3))
 #     P_nubar[i, :, :] = np.reshape(P_nubar_temp, (len(p), 3))
-for i in range(len(r)):
-    P_nu_temp, P_nubar_temp = np.split(np.array(sol[i,:]), 2)
-    P_nu[i, :, :] = np.reshape(P_nu_temp, (len(p), 3))
-    P_nubar[i, :, :] = np.reshape(P_nubar_temp, (len(p), 3))
-rho_p_r_nu = np.zeros((len(r), len(p), 2, 2), dtype = complex)
-rho_p_r_nubar = np.zeros((len(r), len(p), 2, 2), dtype = complex)
-for i in range(len(r)):
-    for j in range(len(p)):
-        J_p_r = 1/2*np.identity(2)*(F_p(p[j], E_avg_n_e, alpha, L_n_e)/A[0] + F_p(p[j], E_avg_n_x, alpha, L_n_x)/A[1]) + 1/2*(P_nu[i,j,0]*sigma_x + P_nu[i,j,1]*sigma_y + P_nu[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x)
-        J_pbar_r = 1/2*np.identity(2)*(F_p(p[j], E_avg_an_e, alpha, L_an_e)/A[2] + F_p(p[j], E_avg_an_x, alpha, L_an_x)/A[3]) + 1/2*(P_nubar[i,j,0]*sigma_x + P_nubar[i,j,1]*sigma_y + P_nubar[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x)
-        rho_p_r_nu[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_p_r
-        rho_p_r_nubar[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_pbar_r
 
-Pee = np.zeros((len(r), len(p)))
-Pxx = np.zeros((len(r), len(p)))
+# rho_p_r_nu = np.zeros((len(r), len(p), 2, 2), dtype = complex)
+# rho_p_r_nubar = np.zeros((len(r), len(p), 2, 2), dtype = complex)
+# for i in range(len(r)):
+#     for j in range(len(p)):
+#         J_p_r = 1/2*np.identity(2)*(F_p(p[j], E_avg_n_e, alpha, L_n_e)/A[0] + F_p(p[j], E_avg_n_x, alpha, L_n_x)/A[1]) + 1/2*(P_nu[i,j,0]*sigma_x + P_nu[i,j,1]*sigma_y + P_nu[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x)
+#         J_pbar_r = 1/2*np.identity(2)*(F_p(p[j], E_avg_an_e, alpha, L_an_e)/A[2] + F_p(p[j], E_avg_an_x, alpha, L_an_x)/A[3]) + 1/2*(P_nubar[i,j,0]*sigma_x + P_nubar[i,j,1]*sigma_y + P_nubar[i,j,2]*sigma_z)*(F_nubar_e - F_nubar_x)
+#         rho_p_r_nu[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_p_r
+#         rho_p_r_nubar[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_pbar_r
 
-for j in range(len(p)):
-    Pee[:,j] = np.divide(rho_p_r_nu[:,j,0,0], np.trace(rho_p_r_nu[:,j,:,:], axis1=1, axis2=2))
-    Pxx[:,j] = np.divide(rho_p_r_nu[:,j,1,1], np.trace(rho_p_r_nu[:,j,:,:], axis1=1, axis2=2))
+# Pee = np.zeros((len(r), len(p)))
+# Pxx = np.zeros((len(r), len(p)))
 
-np.savetxt('p_nu.csv', P_nu[-1, :, :], delimiter=',')
-np.savetxt('p_nubar.csv', P_nubar[-1, :, :], delimiter=',')
-np.savetxt('pee.csv', Pee, delimiter=',')
-np.savetxt('pxx.csv', Pxx, delimiter=',')
+# for j in range(len(p)):
+#     Pee[:,j] = np.divide(rho_p_r_nu[:,j,0,0], np.trace(rho_p_r_nu[:,j,:,:], axis1=1, axis2=2))
+#     Pxx[:,j] = np.divide(rho_p_r_nu[:,j,1,1], np.trace(rho_p_r_nu[:,j,:,:], axis1=1, axis2=2))
+
+# np.savetxt('p_nu.csv', P_nu[-1, :, :], delimiter=',')
+# np.savetxt('p_nubar.csv', P_nubar[-1, :, :], delimiter=',')
+# np.savetxt('pee.csv', Pee, delimiter=',')
+# np.savetxt('pxx.csv', Pxx, delimiter=',')
 
 
 # Multi-angle simulations
@@ -243,7 +239,7 @@ def v_u(r, u):
     v_u_r = np.sqrt(1 - u*(R/r)**2)
     return v_u_r
 
-def init_multi_angle(p, u):
+def init_multi_angle(p, u, A):
     P_p_u0 = np.zeros((len(p), len(u), 3))
     P_pbar_u0 = np.zeros((len(p), len(u), 3))
     F_p_nu_e = np.zeros(len(p))
@@ -251,10 +247,10 @@ def init_multi_angle(p, u):
     F_p_nubar_e = np.zeros(len(p))
     F_p_nubar_x = np.zeros(len(p))
     for i in range(len(p)):
-        F_p_nu_e[i] = 2.4*F_p(p[i], E_avg_n_e, alpha, L_n_e) 
-        F_p_nu_x[i] = 1*F_p(p[i], E_avg_n_x, alpha, L_n_x)
-        F_p_nubar_e[i] = 1.6*F_p(p[i], E_avg_an_e, alpha, L_an_e)
-        F_p_nubar_x[i] = 1*F_p(p[i], E_avg_an_x, alpha, L_an_x)
+        F_p_nu_e[i] = 2.4*F_p(p[i], E_avg_n_e, alpha, L_n_e)/A[0]
+        F_p_nu_x[i] = 1*F_p(p[i], E_avg_n_x, alpha, L_n_x)/A[1]
+        F_p_nubar_e[i] = 1.6*F_p(p[i], E_avg_an_e, alpha, L_an_e)/A[2]
+        F_p_nubar_x[i] = 1*F_p(p[i], E_avg_an_x, alpha, L_an_x)/A[3]
     F_nubar_e = np.trapz(F(F_p_nubar_e, p), x = u, axis = 1)
     F_nubar_x = np.trapz(F(F_p_nubar_x, p), x = u, axis = 1)
 
@@ -266,10 +262,9 @@ def init_multi_angle(p, u):
 
 def derivs_multi_angle(P, r, p, u, hierarchy, F_nubar_e, F_nubar_x):
     r = r*inv_km_to_eV
-    print(r)
     P_p_u_nu, P_pbar_u_nu = np.split(P, 2)
-    #P_p_nu = P_p_u_nu.reshape((len(p), 3))
-    #P_pbar_nu = P_pbar_u_nu.reshape((len(p), 3))
+    P_p_nu = P_p_u_nu.reshape((len(p), 3))
+    P_pbar_nu = P_pbar_u_nu.reshape((len(p), 3))
     rhs_nu = np.zeros((len(p), len(u), 3))
     rhs_nubar = np.zeros((len(p), len(u), 3))
     for i in range(len(p)):
@@ -282,12 +277,27 @@ def derivs_multi_angle(P, r, p, u, hierarchy, F_nubar_e, F_nubar_x):
     dPdt = dPdt.flatten()
     return dPdt
 
-def solve_multi_angle(p, u, hierarchy):
-    P_p_u0, P_pbar_u0, F_nubar_e, F_nubar_x = init_multi_angle(p, u)
+def solve_multi_angle(p, r, r_eval, u, hierarchy, A):
+    P_p_u0, P_pbar_u0, F_nubar_e, F_nubar_x = init_multi_angle(p, u, A)
     P = np.vstack((P_p_u0, P_pbar_u0))
     P = P.flatten()
-    sol = solve_ivp(derivs_multi_angle, P, r, args = (p, u, hierarchy, F_nubar_e, F_nubar_x))
-    return sol
+    packet = 20
+    packet_size = int(len(r_eval)/packet)
+    for i in range(packet):
+        print('Packet ' + str(i+1) + ' out of ' + str(packet) + ' in progress.')
+        sol = odeint(derivs, P, r_eval[i*packet_size:(i+1)*packet_size], args = (p, u, hierarchy, F_nubar_e, F_nubar_x), hmax = hmax)
+        P = sol[:,-1]
+        print('Packet ' + str(i+1) + ' out of ' + str(packet) + ' completed.')
+        P_nu = np.zeros((len(r), len(p), len(u), 3))
+        P_nubar = np.zeros((len(r), len(p), len(u), 3))
+        for i in range(len(r)):
+            P_nu_temp, P_nubar_temp = np.split(np.array(sol[:,i]), 2)
+            P_nu[i, :, :] = np.reshape(P_nu_temp, (len(p), 3))
+            P_nubar[i, :, :] = np.reshape(P_nubar_temp, (len(p), 3))
+        np.savetxt('P_nu_ma_' + str(i+1) + '.csv', P_nu, delimiter = ',')
+        np.savetxt('P_nubar_ma_' + str(i+1) + '.csv', P_nubar, delimiter = ',')
+        print('Packet ' + str(i+1) + ' out of ' + str(packet) + ' saved.')
+    return
 
 
 
