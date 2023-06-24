@@ -4,6 +4,7 @@ from scipy.integrate import solve_ivp
 from scipy.integrate import odeint
 from scipy.special import gamma
 import math
+import time
 
 
 # Constants
@@ -123,12 +124,12 @@ def rk4(f, u0, t0, tf , n, p, hierarchy, F_nubar_e, F_nubar_x):
 
 # Initial conditions
 def init(p, A):
-    P_p0 = np.zeros((len(p), 3), dtype=np.float64)
-    P_pbar0 = np.zeros((len(p), 3), dtype=np.float64)
-    F_p_nu_e = np.zeros(len(p), dtype=np.float64)
-    F_p_nu_x = np.zeros(len(p), dtype=np.float64)
-    F_p_nubar_e = np.zeros(len(p), dtype=np.float64)
-    F_p_nubar_x = np.zeros(len(p), dtype=np.float64)
+    P_p0 = np.zeros((len(p), 3))
+    P_pbar0 = np.zeros((len(p), 3))
+    F_p_nu_e = np.zeros(len(p))
+    F_p_nu_x = np.zeros(len(p))
+    F_p_nubar_e = np.zeros(len(p))
+    F_p_nubar_x = np.zeros(len(p))
     for i in range(len(p)):
         F_p_nu_e[i] = F_p(p[i], E_avg_n_e, alpha, L_n_e)/A[0]
         F_p_nu_x[i] = F_p(p[i], E_avg_n_x, alpha, L_n_x)/A[1]
@@ -158,8 +159,8 @@ def derivs(P, r, p, hierarchy, F_nubar_e, F_nubar_x):
     rhs_nu = np.zeros((len(p), 3))
     rhs_nubar = np.zeros((len(p), 3))
     for i in range(len(p)):
-        rhs_nu[i] = np.cross(omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*0*L_array() + mu_r_eff(F_nubar_e, F_nubar_x, r)*D_array(P_nu, P_nubar), P_p_nu[i,:])
-        rhs_nubar[i] = np.cross(-omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*0*L_array() + mu_r_eff(F_nubar_e, F_nubar_x, r)*D_array(P_nu, P_nubar), P_pbar_nu[i,:])
+        rhs_nu[i] = np.cross(omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*L_array() + mu_r_eff(F_nubar_e, F_nubar_x, r)*D_array(P_nu, P_nubar), P_p_nu[i,:])
+        rhs_nubar[i] = np.cross(-omega_p(p[i])*B_array(hierarchy) + lambda_r(r)*L_array() + mu_r_eff(F_nubar_e, F_nubar_x, r)*D_array(P_nu, P_nubar), P_pbar_nu[i,:])
     dPdt = np.vstack((rhs_nu, rhs_nubar))
     dPdt = dPdt.flatten()
     return dPdt    
@@ -180,24 +181,27 @@ A_nubar_x = np.trapz(f(p, E_avg_an_x, alpha), x = p)
 A = np.array([A_nu_e, A_nu_x, A_nubar_e, A_nubar_x])
 
 r_i = 30/inv_km_to_eV
-r_f = 250/inv_km_to_eV
+r_f = 400/inv_km_to_eV
 r = [r_i, r_f]
 hmax = (2*np.pi/max(omega_p(p)))/20
 r_eval = np.arange(r_i, r_f, hmax)
 
 
-P_p0, P_pbar0, F_nubar_e, F_nubar_x = init(p, A)
+# P_p0, P_pbar0, F_nubar_e, F_nubar_x = init(p, A)
 
-plt.figure()
-plt.plot(r_eval*inv_km_to_eV, mu_r_eff(F_nubar_e, F_nubar_x, r_eval*inv_km_to_eV), 'r-')
-plt.plot(r_eval*inv_km_to_eV, [lambda_r(x*inv_km_to_eV) for x in r_eval], 'b-')
-plt.plot(r_eval*inv_km_to_eV, np.repeat(omega_p(p[0]), len(r_eval)), 'g-')
-plt.plot(r_eval*inv_km_to_eV, np.repeat(omega_p(p[-1]), len(r_eval)), 'g-')
-plt.yscale('log')
-plt.show()
+# plt.figure()
+# plt.plot(r_eval*inv_km_to_eV, mu_r_eff(F_nubar_e, F_nubar_x, r_eval*inv_km_to_eV), 'r-')
+# plt.plot(r_eval*inv_km_to_eV, [lambda_r(x*inv_km_to_eV) for x in r_eval], 'b-')
+# plt.plot(r_eval*inv_km_to_eV, np.repeat(omega_p(p[0]), len(r_eval)), 'g-')
+# plt.plot(r_eval*inv_km_to_eV, np.repeat(omega_p(p[-1]), len(r_eval)), 'g-')
+# plt.yscale('log')
+# plt.show()
 
 hierarchy = 'inverted'
+print('Starting solver...')
+start_time = time.time()
 sol, F_nubar_e, F_nubar_x = solve(p, r, r_eval, hierarchy, A, hmax)
+print("--- %s seconds ---" % (time.time() - start_time))
 # r = sol.t
 # sol = sol.y
 r = r_eval
@@ -221,16 +225,18 @@ for i in range(len(r)):
         rho_p_r_nu[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_p_r
         rho_p_r_nubar[i, j, :, :] = (2*np.pi)/(p[j]**2*R**2)*inv_km_to_eV**2*J_pbar_r
 
-P_ee = np.divide(rho_p_r_nu[:, 0, 0, 0], np.trace(rho_p_r_nu[:, 0, :, :], axis1 = 1, axis2 = 2))
-P_xx = np.divide(rho_p_r_nu[:, 0, 1, 1], np.trace(rho_p_r_nu[:, 0, :, :], axis1 = 1, axis2 = 2))
+Pee = np.zeros((len(r), len(p)))
+Pxx = np.zeros((len(r), len(p)))
 
-plt.figure()
-plt.plot(r*inv_km_to_eV, P_ee, label = r'$P_{ee}$')
-plt.plot(r*inv_km_to_eV, P_xx, label = r'$P_{xx}$')
-plt.xlabel(r'$r$ [eV$^{-1}$]')
-plt.ylabel(r'$P_{ee}, P_{xx}$')
-plt.legend()
-plt.show()
+for j in range(len(p)):
+    Pee[:,j] = np.divide(rho_p_r_nu[:,j,0,0], np.trace(rho_p_r_nu[:,j,:,:], axis1=1, axis2=2))
+    Pxx[:,j] = np.divide(rho_p_r_nu[:,j,1,1], np.trace(rho_p_r_nu[:,j,:,:], axis1=1, axis2=2))
+
+np.savetxt('p_nu.csv', P_nu[-1, :, :], delimiter=',')
+np.savetxt('p_nubar.csv', P_nubar[-1, :, :], delimiter=',')
+np.savetxt('pee.csv', Pee, delimiter=',')
+np.savetxt('pxx.csv', Pxx, delimiter=',')
+
 
 # Multi-angle simulations
 def v_u(r, u):
