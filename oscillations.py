@@ -180,7 +180,7 @@ A_nubar_x = np.trapz(f(p, E_avg_an_x, alpha), x = p)
 A = np.array([A_nu_e, A_nu_x, A_nubar_e, A_nubar_x])
 
 r_i = 30/inv_km_to_eV
-r_f = 3600/inv_km_to_eV
+r_f = 3770.865/inv_km_to_eV
 r = [r_i, r_f]
 hmax = (2*np.pi/max(omega_p(p)))/20
 r_eval = np.arange(r_i, r_f, hmax)
